@@ -1,9 +1,15 @@
 version: '3'
 
+networks:
+    gitea:
+        external: false
+
 services:
     nginx:
         image: nginx:1.15-alpine
         command: "/bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'"
+        networks:
+          - gitea
         ports: 
           - 80:80
           - 443:443
@@ -11,6 +17,7 @@ services:
           - ./data/nginx:/etc/nginx/conf.d
           - ./data/certbot/conf:/etc/letsencrypt
           - ./data/certbot/www:/var/www/certbot
+
     certbot:
         image: certbot/certbot
         entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
@@ -18,3 +25,38 @@ services:
           - ./data/certbot/conf:/etc/letsencrypt
           - ./data/certbot/www:/var/www/certbot
 
+    gitea:
+        image: gitea/gitea:latest
+        container_name: gitea
+        environment:
+          - USER_UID=1000
+          - USER_GID=1000
+          - DB_TYPE=postgres
+          - DB_HOST=db:5432
+          - DB_NAME=gitea
+          - DB_USER=gitea
+          - DB_PASSWD=gitea
+        restart: always
+        networks:
+          - gitea
+        volumes:
+          - ./data/gitea:/data
+          - /etc/timezone:/etc/timezone:ro
+          - /etc/localtime:/etc/localtime:ro
+        ports:
+          - "3000:3000"
+          - "222:22"
+        depends_on:
+          - postgres
+
+    postgres:
+        image: postgres:9.6
+        restart: always
+        environment:
+          - POSTGRES_USER=gitea
+          - POSTGRES_PASSWORD=gitea
+          - POSTGRES_DB=gitea
+        networks:
+          - gitea
+        volumes:
+          - ./data/postgres:/var/lib/postgresql/data
